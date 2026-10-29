@@ -1,0 +1,57 @@
+{
+    "namespace": "LocalOcr",
+    "bridge_functions": [
+        {
+            "name": "LocalOcr.GetCapabilities",
+            "android": "dev.firstlightui.plugins.local_ocr.LocalOcrFunctions.GetCapabilities",
+            "ios": "LocalOcrFunctions.GetCapabilities",
+            "description": "Report the device's document capture, OCR and local generative model capabilities"
+        },
+        {
+            "name": "LocalOcr.Capture",
+            "android": "dev.firstlightui.plugins.local_ocr.LocalOcrFunctions.Capture",
+            "ios": "LocalOcrFunctions.Capture",
+            "description": "Open the system document scanner; pages arrive as a PagesCaptured, CaptureCancelled or CaptureFailed event"
+        },
+        {
+            "name": "LocalOcr.Discard",
+            "android": "dev.firstlightui.plugins.local_ocr.LocalOcrFunctions.Discard",
+            "ios": "LocalOcrFunctions.Discard",
+            "description": "Delete captured page files"
+        },
+        {
+            "name": "LocalOcr.Recognize",
+            "android": "dev.firstlightui.plugins.local_ocr.LocalOcrFunctions.Recognize",
+            "ios": "LocalOcrFunctions.Recognize",
+            "description": "Start on-device text recognition for one or more pages; the result arrives as a TextRecognized or TextRecognitionFailed event"
+        }
+    ],
+    "events": [
+        "FirstlightUI\\LocalOcr\\Events\\PagesCaptured",
+        "FirstlightUI\\LocalOcr\\Events\\CaptureCancelled",
+        "FirstlightUI\\LocalOcr\\Events\\CaptureFailed",
+        "FirstlightUI\\LocalOcr\\Events\\TextRecognized",
+        "FirstlightUI\\LocalOcr\\Events\\TextRecognitionFailed"
+    ],
+    "android": {
+        "min_version": 26,
+        "permissions": [],
+        "dependencies": {
+            "implementation": [
+                "com.google.mlkit:text-recognition:16.0.1",
+                "com.google.android.gms:play-services-mlkit-document-scanner:16.0.0",
+                "androidx.exifinterface:exifinterface:1.3.7"
+            ]
+        }
+    },
+    "ios": {
+        "min_version": "18.0",
+        "info_plist": {
+            "NSCameraUsageDescription": "The camera is used to scan documents and labels so their text can be read on this device."
+        },
+        "dependencies": {
+            "swift_packages": [],
+            "pods": []
+        }
+    }
+}

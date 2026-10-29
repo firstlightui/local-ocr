@@ -1,0 +1,12 @@
+{
+    "name": "@firstlightui/local-ocr",
+    "version": "0.1.0",
+    "description": "JavaScript bridge for the firstlightui/local-ocr NativePHP plugin",
+    "license": "MIT",
+    "type": "module",
+    "main": "resources/js/index.js",
+    "types": "resources/js/index.d.ts",
+    "files": [
+        "resources/js"
+    ]
+}

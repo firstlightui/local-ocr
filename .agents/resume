@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+
+# The snapshot holds tools and dependencies only; nothing needs reconnecting.
+for binary in php composer; do
+    command -v "$binary" >/dev/null
+done
+if [[ ! -f "$repo_root/vendor/autoload.php" ]]; then
+    echo 'Missing PHP dependencies; rerun .agents/setup.' >&2
+    exit 1
+fi
+
+echo 'local-ocr orb ready. Run vendor/bin/pest. Swift and Kotlin compile only on macOS (the wojt-mac runner).'
