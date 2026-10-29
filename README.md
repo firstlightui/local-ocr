@@ -91,10 +91,10 @@ Captured pages stay until you discard them. Anything left over is deleted on the
 
 ## Usage (JavaScript)
 
-Install the bundled JS package from the Composer vendor directory:
+Install the JS package from npm. Use the same version as the Composer package:
 
 ```bash
-npm install ./vendor/firstlightui/local-ocr
+npm install @firstlightui/local-ocr@alpha
 ```
 
 ```js
