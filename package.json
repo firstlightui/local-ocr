@@ -22,6 +22,9 @@
     "files": [
         "resources/js"
     ],
+    "scripts": {
+        "test": "node --test tests/js/*.test.js"
+    },
     "publishConfig": {
         "access": "public",
         "tag": "alpha"
