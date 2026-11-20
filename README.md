@@ -27,8 +27,19 @@ Rebuild the app (`php artisan native:run`) after installing.
 | iOS | 18.0+. Capture needs a real device; VisionKit's document camera doesn't run in the Simulator. |
 | Android | API 26+. Capture needs Google Play services. |
 | Permissions | iOS adds `NSCameraUsageDescription`. Android needs none: the scanner runs in Google Play services. |
+| NativePHP | `nativephp/mobile` 4.6.1 or later. Works alongside [Firstlight UI](https://firstlightui.dev) 1.1. |
 
 Built and tested with Xcode 27.
+
+The plugin's camera purpose string is generic. To word it for your app, set it in `config/nativephp.php`, which overrides plugins:
+
+```php
+'permissions' => [
+    'NSCameraUsageDescription' => 'Scan referral letters so their text can be read on this device.',
+],
+```
+
+On Android the scanner shows your app's name, so set `APP_NAME`.
 
 Android dependencies added to the app: `com.google.mlkit:text-recognition:16.0.1`, `com.google.android.gms:play-services-mlkit-document-scanner:16.0.0`, `androidx.exifinterface:exifinterface:1.3.7`.
 
@@ -65,11 +76,14 @@ public function scan(): void
 }
 ```
 
-Each builder starts automatically when it goes out of scope. You can also listen with `#[On]`; listener parameters bind by name to the event payload:
+Each builder starts automatically when it goes out of scope. Fluent callbacks like `->pagesCaptured()` run in SuperNative `NativeComponent` screens.
+
+You can also listen with `#[On]` in a `NativeComponent`, or `#[OnNative]` in Livewire. Listener parameters bind by name to the event payload:
 
 ```php
 use FirstlightUI\LocalOcr\Events\TextRecognized;
-use Native\Mobile\Attributes\On;
+use Native\Mobile\Attributes\On;       // NativeComponent screens
+use Native\Mobile\Attributes\OnNative; // Livewire components
 
 #[On(TextRecognized::class)]
 public function onText(string $id, array $result): void
@@ -77,6 +91,8 @@ public function onText(string $id, array $result): void
     $this->pages = $result['pages'];
 }
 ```
+
+Every result carries the `id` of its request. If you run several recognitions at once, give each one its callbacks, or listen by attribute and match on `$id`. When a result has no callback of its own, NativePHP hands it to the most recent pending callback for the same event.
 
 | Method | Returns |
 |---|---|
@@ -88,6 +104,18 @@ public function onText(string $id, array $result): void
 `$pages` can be a path, a list of paths, or the `pages` array from `PagesCaptured`. Both builders also have `id()`, `getId()` and `start()`.
 
 Captured pages stay until you discard them. Anything left over is deleted on the next capture after 24 hours. iOS also clears its temporary directory when it needs space.
+
+### Events
+
+| Event | Payload | When |
+|---|---|---|
+| `PagesCaptured` | `id`, `pages` | The user finished scanning at least one page. |
+| `CaptureCancelled` | `id` | The user closed the scanner without scanning. |
+| `CaptureFailed` | `id`, `code`, `message` | The scanner couldn't open, failed, or the pages couldn't be saved. |
+| `TextRecognized` | `id`, `result` | Every page was read. |
+| `TextRecognitionFailed` | `id`, `code`, `message` | A page was missing, unreadable, or recognition failed. |
+
+All five are in `FirstlightUI\LocalOcr\Events`. If Android ends the app while the scanner is open, which can happen on low-memory devices, that capture's event never arrives.
 
 ## Usage (JavaScript)
 
@@ -113,7 +141,7 @@ if (pages) {
 }
 ```
 
-`capturePages()` and `recognizeText()` resolve when the matching event arrives and reject with a `LocalOcrError` carrying `code`. `Capture()` and `Recognize()` are the raw bridge calls, if you want to handle the `native-event` DOM events yourself; their names are in `Events`. TypeScript types for every contract are in `resources/js/index.d.ts`.
+This works the same from Inertia with Vue or React, or plain JavaScript. `capturePages()` and `recognizeText()` resolve when the matching event arrives and reject with a `LocalOcrError` carrying `code`. `Capture()` and `Recognize()` are the raw bridge calls, if you want to handle the `native-event` DOM events yourself; their names are in `Events`. TypeScript types for every contract are in `resources/js/index.d.ts`.
 
 ## Contracts
 
@@ -191,7 +219,7 @@ Payload: `{ "id": "…", "result": { … } }`
 - `pages` follows the order of the paths you passed; `page` is 1-based.
 - `text` is the page texts joined by blank lines. Each page's `text` is its block texts joined by newlines.
 - Boxes are normalized to 0–1 of the upright image (EXIF orientation applied), origin top-left. A box may be `null` if the engine can't locate it.
-- `confidence` is 0–1, or `null` if the engine doesn't score it. iOS scores lines only, so each word repeats its line's confidence.
+- `confidence` is 0–1, or `null` if the engine doesn't score it. iOS scores lines only, so each word repeats its line's confidence. In `fast` mode iOS reports 0.5 for every line, so don't threshold on it there.
 - iOS has no paragraph grouping: each line is its own block. Android groups lines into blocks.
 - Android downsamples images larger than 4096 px on their long side. `image` reports the size that was read.
 
@@ -211,10 +239,16 @@ A recognition failure on any page fails the whole request, and the message names
 ```bash
 composer install
 vendor/bin/pest
+vendor/bin/testbench native:plugin:validate "$PWD"
+npm test
 ```
 
-The suite checks the PHP-to-native contract with NativePHP's `FakeBridge`, and checks that the manifest, Kotlin, Swift and JS agree on function and event names. Native capture and recognition can only be verified on a device or simulator.
+Pest checks the PHP-to-native contract with NativePHP's `FakeBridge`, and checks that the manifest, Kotlin, Swift and JS agree on function and event names. `npm test` checks that the JS helpers settle on the event carrying their own request id. Native capture and recognition can only be verified on a device or simulator.
+
+## Support
+
+Report bugs and ask questions in [GitHub issues](https://github.com/firstlightui/local-ocr/issues), or email [team@firstlightui.dev](mailto:team@firstlightui.dev). Changes are listed in the [changelog](https://github.com/firstlightui/local-ocr/blob/main/CHANGELOG.md).
 
 ## License
 
-MIT
+MIT. See [LICENSE](https://github.com/firstlightui/local-ocr/blob/main/LICENSE).

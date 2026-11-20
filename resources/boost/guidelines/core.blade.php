@@ -7,6 +7,9 @@ On-device document capture (VisionKit / ML Kit Document Scanner) and OCR (Apple 
 - `PagesCaptured` gives `pages`: `[{path, width, height}]`, JPEGs in private temporary storage. Pass them straight to `recognize()`, and call `LocalOcr::discard($pages)` when done.
 - Recognition results follow contract version 1: `result.text`, then `result.pages[].blocks[].lines[].words[]`, each with `text`, `confidence` (0–1 or null) and `boundingBox` (normalized 0–1, origin top-left).
 - iOS-only recognition options: `->languages([...])`, `->fast()`.
+- Fluent callbacks (`->pagesCaptured()`, `->textRecognized()`) run in SuperNative `NativeComponent` screens. In Livewire, listen with `#[OnNative(TextRecognized::class)]`; parameters bind by name (`string $id, array $result`).
+- When running several requests at once, give each its own callbacks or match on `$id`: NativePHP hands a result with no callback of its own to the most recent pending callback for that event.
+- The camera purpose string can be overridden in `config/nativephp.php` under `permissions.NSCameraUsageDescription`.
 
 @verbatim
 <code-snippet name="Capture, recognize and discard" lang="php">
