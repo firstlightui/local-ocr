@@ -171,28 +171,33 @@ enum LocalOcrFunctions {
         }
     }
 
+    /// Each page is a full-resolution bitmap, so pages are read and encoded
+    /// one at a time off the main thread; holding them all at once can run a
+    /// long scan out of memory.
     static func savePages(id: String, scan: VNDocumentCameraScan) {
         let directory = captureRoot().appendingPathComponent(id, isDirectory: true)
-        let images = (0..<scan.pageCount).map { scan.imageOfPage(at: $0) }
 
         worker.async {
             do {
                 try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
                 var pages: [[String: Any]] = []
 
-                for (index, image) in images.enumerated() {
-                    guard let data = image.jpegData(compressionQuality: 0.9) else {
-                        throw NSError(domain: "LocalOcr", code: 1, userInfo: [
-                            NSLocalizedDescriptionKey: "Could not encode page \(index + 1)",
+                for index in 0..<scan.pageCount {
+                    try autoreleasepool {
+                        let image = scan.imageOfPage(at: index)
+                        guard let data = image.jpegData(compressionQuality: 0.9) else {
+                            throw NSError(domain: "LocalOcr", code: 1, userInfo: [
+                                NSLocalizedDescriptionKey: "Could not encode page \(index + 1)",
+                            ])
+                        }
+                        let file = directory.appendingPathComponent("page-\(index + 1).jpg")
+                        try data.write(to: file, options: [.atomic, .completeFileProtection])
+                        pages.append([
+                            "path": file.path,
+                            "width": Int(image.size.width * image.scale),
+                            "height": Int(image.size.height * image.scale),
                         ])
                     }
-                    let file = directory.appendingPathComponent("page-\(index + 1).jpg")
-                    try data.write(to: file, options: [.atomic, .completeFileProtection])
-                    pages.append([
-                        "path": file.path,
-                        "width": Int(image.size.width * image.scale),
-                        "height": Int(image.size.height * image.scale),
-                    ])
                 }
 
                 dispatch(capturedEvent, ["id": id, "pages": pages])
@@ -210,59 +215,18 @@ enum LocalOcrFunctions {
         var pages: [[String: Any]] = []
 
         for (index, path) in paths.enumerated() {
-            let pageStartedAt = Date()
-
-            guard let image = UIImage(contentsOfFile: path), let cgImage = image.cgImage else {
-                _ = fail(failedEvent, id, "DECODE_FAILED", "Could not decode page \(index + 1) at \(path)")
-                return
-            }
-
-            // Vision reports boxes in the oriented (upright) image, so report its size.
-            let orientation = CGImagePropertyOrientation(image.imageOrientation)
-            let sideways: Set<CGImagePropertyOrientation> = [.left, .leftMirrored, .right, .rightMirrored]
-            let width = sideways.contains(orientation) ? cgImage.height : cgImage.width
-            let height = sideways.contains(orientation) ? cgImage.width : cgImage.height
-
-            let request = VNRecognizeTextRequest()
-            request.recognitionLevel = level
-            request.usesLanguageCorrection = level == .accurate
-            if !languages.isEmpty {
-                request.recognitionLanguages = languages
-            }
-
             do {
-                try VNImageRequestHandler(cgImage: cgImage, orientation: orientation, options: [:]).perform([request])
+                // Release each decoded page before the next one is read.
+                pages.append(try autoreleasepool {
+                    try recognizePage(index + 1, path: path, languages: languages, level: level)
+                })
+            } catch let failure as PageFailure {
+                _ = fail(failedEvent, id, failure.code, failure.message)
+                return
             } catch {
                 _ = fail(failedEvent, id, "RECOGNITION_FAILED", "Page \(index + 1): \(error.localizedDescription)")
                 return
             }
-
-            // Vision has no block grouping: each recognized line is its own block.
-            var blocks: [[String: Any]] = []
-            for observation in request.results ?? [] {
-                guard let candidate = observation.topCandidates(1).first else { continue }
-                let confidence = round(Double(candidate.confidence))
-                let line: [String: Any] = [
-                    "text": candidate.string,
-                    "confidence": confidence,
-                    "boundingBox": box(observation.boundingBox),
-                    "words": words(in: candidate, confidence: confidence),
-                ]
-                blocks.append([
-                    "text": candidate.string,
-                    "boundingBox": box(observation.boundingBox),
-                    "lines": [line],
-                ])
-            }
-
-            pages.append([
-                "page": index + 1,
-                "path": path,
-                "image": ["width": width, "height": height],
-                "text": blocks.compactMap { $0["text"] as? String }.joined(separator: "\n"),
-                "blocks": blocks,
-                "durationMs": Int(Date().timeIntervalSince(pageStartedAt) * 1000),
-            ])
         }
 
         let result: [String: Any] = [
@@ -274,6 +238,67 @@ enum LocalOcrFunctions {
         ]
 
         dispatch(recognizedEvent, ["id": id, "result": result])
+    }
+
+    struct PageFailure: Error {
+        let code: String
+        let message: String
+    }
+
+    static func recognizePage(
+        _ page: Int, path: String, languages: [String], level: VNRequestTextRecognitionLevel
+    ) throws -> [String: Any] {
+        let startedAt = Date()
+
+        guard let image = UIImage(contentsOfFile: path), let cgImage = image.cgImage else {
+            throw PageFailure(code: "DECODE_FAILED", message: "Could not decode page \(page) at \(path)")
+        }
+
+        // Vision reports boxes in the oriented (upright) image, so report its size.
+        let orientation = CGImagePropertyOrientation(image.imageOrientation)
+        let sideways: Set<CGImagePropertyOrientation> = [.left, .leftMirrored, .right, .rightMirrored]
+        let width = sideways.contains(orientation) ? cgImage.height : cgImage.width
+        let height = sideways.contains(orientation) ? cgImage.width : cgImage.height
+
+        let request = VNRecognizeTextRequest()
+        request.recognitionLevel = level
+        request.usesLanguageCorrection = level == .accurate
+        if !languages.isEmpty {
+            request.recognitionLanguages = languages
+        }
+
+        do {
+            try VNImageRequestHandler(cgImage: cgImage, orientation: orientation, options: [:]).perform([request])
+        } catch {
+            throw PageFailure(code: "RECOGNITION_FAILED", message: "Page \(page): \(error.localizedDescription)")
+        }
+
+        // Vision has no block grouping: each recognized line is its own block.
+        var blocks: [[String: Any]] = []
+        for observation in request.results ?? [] {
+            guard let candidate = observation.topCandidates(1).first else { continue }
+            let confidence = round(Double(candidate.confidence))
+            let line: [String: Any] = [
+                "text": candidate.string,
+                "confidence": confidence,
+                "boundingBox": box(observation.boundingBox),
+                "words": words(in: candidate, confidence: confidence),
+            ]
+            blocks.append([
+                "text": candidate.string,
+                "boundingBox": box(observation.boundingBox),
+                "lines": [line],
+            ])
+        }
+
+        return [
+            "page": page,
+            "path": path,
+            "image": ["width": width, "height": height],
+            "text": blocks.compactMap { $0["text"] as? String }.joined(separator: "\n"),
+            "blocks": blocks,
+            "durationMs": Int(Date().timeIntervalSince(startedAt) * 1000),
+        ]
     }
 
     /// Vision only scores whole lines, so each word carries its line's confidence.
