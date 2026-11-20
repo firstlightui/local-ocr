@@ -1,6 +1,6 @@
 {
     "name": "@firstlightui/local-ocr",
-    "version": "1.0.0-alpha2",
+    "version": "1.0.0",
     "description": "JavaScript bridge for the firstlightui/local-ocr NativePHP plugin: on-device document capture and OCR",
     "license": "MIT",
     "homepage": "https://github.com/firstlightui/local-ocr#readme",
@@ -27,6 +27,6 @@
     },
     "publishConfig": {
         "access": "public",
-        "tag": "alpha"
+        "tag": "latest"
     }
 }

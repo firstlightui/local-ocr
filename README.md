@@ -122,7 +122,7 @@ All five are in `FirstlightUI\LocalOcr\Events`. If Android ends the app while th
 Install the JS package from npm. Use the same version as the Composer package:
 
 ```bash
-npm install @firstlightui/local-ocr@alpha
+npm install @firstlightui/local-ocr
 ```
 
 ```js

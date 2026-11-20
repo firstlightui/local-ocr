@@ -1,5 +1,6 @@
 {
     "name": "firstlightui/local-ocr",
+    "version": "1.0.0",
     "description": "On-device multi-page document capture and OCR for NativePHP Mobile, using VisionKit and Apple Vision on iOS and ML Kit on Android.",
     "namespace": "LocalOcr",
     "platforms": [
